@@ -1,3 +1,4 @@
+const supabase = require("./config/supabase");
 require("dotenv").config();
 
 const express = require("express");
@@ -14,8 +15,14 @@ const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
-app.get("/", (req, res) => {
-  res.send("Life Assistant LINE Bot is running.");
+app.get("/", async (req, res) => {
+  const { data, error } = await supabase.from("reminders").select("*");
+
+  if (error) {
+    return res.send(error.message);
+  }
+
+  res.json(data);
 });
 
 app.post("/webhook", line.middleware(lineConfig), async (req, res) => {
