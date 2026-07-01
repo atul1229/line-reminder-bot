@@ -1,19 +1,10 @@
 require("dotenv").config();
 
 const express = require("express");
-const line = require("@line/bot-sdk");
+const { line, lineConfig, lineClient } = require("./config/line");
 const supabase = require("./config/supabase");
 
 const app = express();
-
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
-};
-
-const client = new line.messagingApi.MessagingApiClient({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-});
 
 app.get("/", (req, res) => {
   res.send("Life Assistant LINE Bot is running.");
@@ -84,7 +75,7 @@ async function createReminder(replyToken, userId, text) {
 }
 
 async function replyText(replyToken, text) {
-  return client.replyMessage({
+  return lineClient.replyMessage({
     replyToken,
     messages: [
       {
