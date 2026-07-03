@@ -41,6 +41,28 @@ async function createReminder(userId, remindAt, title) {
   return true;
 }
 
+/**
+ * 將提醒標記為已送出
+ *
+ * @param {string} reminderId - reminders 資料表的 id
+ * @returns {Promise<boolean>}
+ */
+async function markReminderAsSent(reminderId) {
+  const { error } = await supabase
+    .from("reminders")
+    .update({
+      status: "sent",
+    })
+    .eq("id", reminderId);
+
+  if (error) {
+    throw error;
+  }
+
+  return true;
+}
+
 module.exports = {
   createReminder,
+  markReminderAsSent,
 };

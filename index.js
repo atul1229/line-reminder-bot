@@ -4,6 +4,7 @@ const express = require("express");
 const { line, lineConfig, lineClient } = require("./config/line");
 const { handleEvent } = require("./controllers/lineController");
 const reminderService = require("./services/reminderService");
+const { startSchedulers } = require("./scheduler");
 
 const app = express();
 
@@ -26,4 +27,7 @@ const port = process.env.PORT || 3000;
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+
+  // 啟動所有背景排程
+  startSchedulers();
 });
