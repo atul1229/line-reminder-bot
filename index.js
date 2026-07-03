@@ -26,3 +26,6 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   startSchedulers();
 });
+
+console.log("handleEvent =", handleEvent);
+console.log("typeof handleEvent =", typeof handleEvent);
