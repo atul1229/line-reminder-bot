@@ -1,54 +1,158 @@
-function parseReminderText(text) {
-  const t = text.replace("提醒我", "").trim();
+/**
+ * =========================================================
+ * LINE Controller
+ * =========================================================
+ *
+ * 負責：
+ * - 接收 LINE event
+ * - Intent 判斷
+ * - 呼叫 Service / Utils
+ * - 回覆使用者
+ *
+ * ❌ 不處理 DB
+ * ❌ 不寫商業邏輯
+ * =========================================================
+ */
 
-  if (!t) return null;
+const reminderService = require("../services/reminderService");
+const dashboardService = require("../services/dashboardService");
+const { parseReminderText } = require("../utils/timeParser");
+const { lineClient } = require("../config/line");
 
-  // ======================
-  // ① 格式化時間
-  // ======================
-  const match = t.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})\s+(.+)/);
-
-  if (match) {
-    const year = new Date().getFullYear();
-
-    return {
-      remindAt: `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}T${match[3]}:${match[4]}:00+08:00`,
-      title: match[5],
-    };
+/**
+ * =========================================================
+ * 主入口：LINE Event Handler
+ * =========================================================
+ */
+async function handleEvent(event) {
+  if (event.type !== "message" || event.message.type !== "text") {
+    return;
   }
 
-  // ======================
-  // ② 自然語言 fallback（重點）
-  // ======================
+  const text = event.message.text.trim();
+  const userId = event.source.userId;
 
-  const now = new Date();
-
-  // 明天
-  if (t.includes("明天")) {
-    const date = new Date(now);
-    date.setDate(date.getDate() + 1);
-
-    return {
-      remindAt: date.toISOString(),
-      title: t.replace("明天", "").trim(),
-    };
+  /**
+   * ======================
+   * Intent: Create Reminder
+   * ======================
+   */
+  if (text.startsWith("提醒我")) {
+    return createReminder(event.replyToken, userId, text);
   }
 
-  // 今天（預設 +1 小時）
-  if (t.includes("今天")) {
-    return {
-      remindAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
-      title: t.replace("今天", "").trim(),
-    };
+  /**
+   * ======================
+   * Intent: Today Dashboard
+   * ======================
+   */
+  if (
+    text.includes("今天工作") ||
+    text.includes("今天要做什麼") ||
+    text.includes("今天提醒")
+  ) {
+    return handleTodayDashboard(event.replyToken, userId);
   }
 
-  // 預設 fallback（避免直接爆）
-  return {
-    remindAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
-    title: t,
-  };
+  /**
+   * ======================
+   * Fallback
+   * ======================
+   */
+  return replyText(
+    event.replyToken,
+    "請輸入：提醒我 7/5 20:00 到巴國小 或 今天工作",
+  );
+}
+
+/**
+ * =========================================================
+ * Intent: Create Reminder
+ * =========================================================
+ */
+async function createReminder(replyToken, userId, text) {
+  const result = parseReminderText(text);
+
+  if (!result) {
+    return replyText(replyToken, "格式錯誤，請重新輸入提醒");
+  }
+
+  try {
+    await reminderService.createReminder(userId, result.remindAt, result.title);
+  } catch (error) {
+    console.error(error);
+    return replyText(replyToken, "建立提醒失敗，請稍後再試");
+  }
+
+  return replyText(replyToken, `✅ 已建立提醒\n\n📝 ${result.title}`);
+}
+
+/**
+ * =========================================================
+ * Intent: Today Dashboard
+ * =========================================================
+ */
+async function handleTodayDashboard(replyToken, userId) {
+  const dashboard = await dashboardService.getTodayDashboard(userId);
+
+  const message = buildDashboardMessage(dashboard);
+
+  return replyText(replyToken, message);
+}
+
+/**
+ * =========================================================
+ * LINE Reply Utility
+ * =========================================================
+ */
+async function replyText(replyToken, text) {
+  return lineClient.replyMessage({
+    replyToken,
+    messages: [
+      {
+        type: "text",
+        text,
+      },
+    ],
+  });
+}
+
+/**
+ * =========================================================
+ * Dashboard Formatter
+ * =========================================================
+ */
+function buildDashboardMessage(d) {
+  let msg = "";
+
+  msg += "📅 今天任務\n";
+  d.todayTasks.forEach((t) => {
+    msg += `- ${t.title}\n`;
+  });
+
+  msg += "\n⏰ 即將到期\n";
+  d.dueSoon.forEach((t) => {
+    msg += `- ${t.title}\n`;
+  });
+
+  msg += "\n⚠️ 衝突\n";
+  if (d.conflicts.length === 0) {
+    msg += "無\n";
+  } else {
+    d.conflicts.forEach((c) => {
+      msg += `- ${c.a} vs ${c.b}\n`;
+    });
+  }
+
+  msg += "\n📊 負載\n";
+  msg += d.load + "\n";
+
+  msg += "\n💡 建議\n";
+  msg += d.aiHint;
+
+  return msg;
 }
 
 module.exports = {
-  parseReminderText,
+  handleEvent,
 };
