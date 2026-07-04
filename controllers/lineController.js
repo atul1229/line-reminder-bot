@@ -17,11 +17,10 @@
 
 const reminderService = require("../services/reminderService");
 const dashboardService = require("../services/dashboardService");
-const { parseReminderText } = require("../utils/timeParser");
 const { lineClient } = require("../config/line");
 const assistantBrain = require("../core/brain/assistantBrain");
 const lineResponseBuilder = require("../core/response/lineResponseBuilder");
-const { parseReminderText } = require("../utils/timeParser");
+const { parseDateTimeText } = require("../utils/timeParser");
 
 /**
  * =========================================================

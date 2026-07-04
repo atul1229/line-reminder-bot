@@ -4,51 +4,49 @@
  * =========================================================
  *
  * 負責：
- * - 將使用者輸入的自然語言轉換成結構化時間
- * - 不處理 LINE / DB / business logic
+ * - 將時間文字轉換成 ISO 時間
+ * - 保留舊版 parseReminderText，避免舊功能壞掉
  *
- * 輸出：
- * {
- *   remindAt: ISO string,
- *   title: string
- * }
+ * 不負責：
+ * - 不判斷 Intent
+ * - 不操作資料庫
+ * - 不呼叫 LINE API
  * =========================================================
  */
 
+/**
+ * 舊版提醒文字解析器
+ *
+ * 目前保留，避免其他地方仍然引用時出錯。
+ *
+ * @param {string} text
+ * @returns {Object|null}
+ */
 function parseReminderText(text) {
   const t = text.replace("提醒我", "").trim();
 
   if (!t) return null;
 
-  /**
-   * ======================
-   * ① 標準格式解析
-   * 7/5 20:00 到巴國小
-   * ======================
-   */
   const match = t.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})\s+(.+)/);
 
   if (match) {
     const year = new Date().getFullYear();
 
     return {
-      remindAt: `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}T${match[3]}:${match[4]}:00+08:00`,
+      remindAt: `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(
+        2,
+        "0",
+      )}T${match[3].padStart(2, "0")}:${match[4]}:00+08:00`,
       title: match[5],
     };
   }
 
-  /**
-   * ======================
-   * ② 自然語言 fallback
-   * ======================
-   */
-
   const now = new Date();
 
-  // 明天
   if (t.includes("明天")) {
     const date = new Date(now);
     date.setDate(date.getDate() + 1);
+    date.setHours(9, 0, 0, 0);
 
     return {
       remindAt: date.toISOString(),
@@ -56,7 +54,6 @@ function parseReminderText(text) {
     };
   }
 
-  // 今天（+1 小時）
   if (t.includes("今天")) {
     return {
       remindAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
@@ -64,20 +61,27 @@ function parseReminderText(text) {
     };
   }
 
-  /**
-   * ======================
-   * ③ fallback（避免 crash）
-   * ======================
-   */
+  if (t.includes("後天")) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + 2);
+    date.setHours(9, 0, 0, 0);
+
+    return {
+      remindAt: date.toISOString(),
+      title: t.replace("後天", "").trim(),
+    };
+  }
+
   return {
     remindAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
     title: t,
   };
 }
+
 /**
  * 將時間文字轉換成提醒時間 ISO 字串
  *
- * @param {string} datetimeText - 時間文字，例如：明天、今天、7/5 20:00
+ * @param {string} datetimeText - 時間文字，例如：明天、今天、後天、7/5 20:00
  * @returns {string|null}
  */
 function parseDateTimeText(datetimeText) {
@@ -97,7 +101,10 @@ function parseDateTimeText(datetimeText) {
   if (standardMatch) {
     const year = now.getFullYear();
 
-    return `${year}-${standardMatch[1].padStart(2, "0")}-${standardMatch[2].padStart(2, "0")}T${standardMatch[3].padStart(2, "0")}:${standardMatch[4]}:00+08:00`;
+    return `${year}-${standardMatch[1].padStart(2, "0")}-${standardMatch[2].padStart(
+      2,
+      "0",
+    )}T${standardMatch[3].padStart(2, "0")}:${standardMatch[4]}:00+08:00`;
   }
 
   /**
