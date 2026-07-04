@@ -60,10 +60,34 @@ async function handleEvent(event) {
      * 如果使用者在多輪對話中輸入取消，
      * 則清除暫存狀態，不再建立提醒。
      */
-    if (isCancelText(text)) {
-      clearConversationState(userId);
+    /**
+     * =========================================================
+     * Helper: Cancel Text
+     * =========================================================
+     *
+     * 判斷使用者是否想取消目前的多輪對話狀態。
+     *
+     * @param {string} text
+     * @returns {boolean}
+     */
+    function isCancelText(text) {
+      const normalizedText = String(text || "")
+        .replace(/\s+/g, "")
+        .replace(/\u3000/g, "")
+        .trim();
 
-      return replyText(event.replyToken, "已取消這次操作。");
+      const cancelWords = [
+        "取消",
+        "不用了",
+        "算了",
+        "不要",
+        "先不要",
+        "不用",
+        "先不用",
+        "停止",
+      ];
+
+      return cancelWords.includes(normalizedText);
     }
 
     /**
@@ -196,10 +220,22 @@ async function handleEvent(event) {
 async function createReminder(replyToken, userId, entities) {
   const { title, datetimeText } = entities;
 
+  /**
+   * 保險機制：
+   * 如果使用者在補時間階段輸入取消，
+   * 即使前面沒有攔截到，也不應該建立提醒。
+   */
+  if (isCancelText(datetimeText)) {
+    return replyText(replyToken, "已取消這次操作。");
+  }
+
   const remindAt = parseDateTimeText(datetimeText);
 
   if (!remindAt) {
-    return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
+    return replyText(
+      replyToken,
+      `我無法判斷「${datetimeText}」是什麼時間，請重新輸入，例如：明天、後天、7/5 20:00。`,
+    );
   }
 
   try {
