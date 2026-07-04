@@ -69,7 +69,7 @@ async function handleEvent(event) {
     brainResult.action === "CREATE_REMINDER" &&
     brainResult.canExecute === true
   ) {
-    return createReminder(event.replyToken, userId, text);
+    return createReminder(event.replyToken, userId, brainResult.entities);
   }
 
   /**
@@ -100,15 +100,17 @@ async function handleEvent(event) {
  * Action: Create Reminder
  * =========================================================
  */
-async function createReminder(replyToken, userId, text) {
-  const result = parseReminderText(text);
+async function createReminder(replyToken, userId, entities) {
+  const { title, datetimeText } = entities;
+
+  const result = parseReminderText(`提醒我 ${datetimeText} ${title}`);
 
   if (!result) {
     return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
   }
 
   try {
-    await reminderService.createReminder(userId, result.remindAt, result.title);
+    await reminderService.createReminder(userId, result.remindAt, title);
   } catch (error) {
     console.error(error);
 
@@ -118,7 +120,7 @@ async function createReminder(replyToken, userId, text) {
   return replyText(
     replyToken,
     lineResponseBuilder.buildReminderCreatedMessage({
-      title: result.title,
+      title,
     }),
   );
 }
