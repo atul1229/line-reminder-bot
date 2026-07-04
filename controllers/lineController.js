@@ -21,6 +21,9 @@ const { lineClient } = require("../config/line");
 const assistantBrain = require("../core/brain/assistantBrain");
 const lineResponseBuilder = require("../core/response/lineResponseBuilder");
 const { parseDateTimeText } = require("../utils/timeParser");
+const {
+  setConversationState,
+} = require("../core/conversation/conversationState");
 
 /**
  * =========================================================
@@ -51,6 +54,27 @@ async function handleEvent(event) {
    * Controller 應該先回覆追問，而不是直接執行功能。
    */
   if (brainResult.needConfirmation === true) {
+    /**
+     * ======================
+     * Conversation State
+     * ======================
+     *
+     * 如果 Brain 判斷是建立提醒但缺少時間，
+     * 先暫存目前的提醒內容，等待使用者下一輪補時間。
+     */
+    if (
+      brainResult.action === "ASK_CONFIRMATION" &&
+      brainResult.reason === "Missing datetime" &&
+      brainResult.entities &&
+      brainResult.entities.title
+    ) {
+      setConversationState(userId, {
+        pendingAction: "CREATE_REMINDER",
+        missingField: "datetimeText",
+        entities: brainResult.entities,
+      });
+    }
+
     return replyText(
       event.replyToken,
       lineResponseBuilder.buildConfirmationMessage(brainResult),
