@@ -5,12 +5,13 @@
  *
  * 負責：
  * - 接收 LINE event
- * - Intent 判斷
- * - 呼叫 Service / Utils
- * - 回覆使用者
+ * - 呼叫 Assistant Brain
+ * - 根據 Brain 決策呼叫對應 Service
+ * - 將回覆交給 LINE API 發送
  *
  * ❌ 不處理 DB
  * ❌ 不寫商業邏輯
+ * ❌ 不負責組回覆文字
  * =========================================================
  */
 
@@ -19,6 +20,7 @@ const dashboardService = require("../services/dashboardService");
 const { parseReminderText } = require("../utils/timeParser");
 const { lineClient } = require("../config/line");
 const assistantBrain = require("../core/brain/assistantBrain");
+const lineResponseBuilder = require("../core/response/lineResponseBuilder");
 
 /**
  * =========================================================
@@ -46,26 +48,22 @@ async function handleEvent(event) {
    * ======================
    *
    * 如果 Brain 判斷資訊不足或語意不明確，
-   * Controller 應該先回覆追問，而不是直接執行舊流程。
+   * Controller 應該先回覆追問，而不是直接執行功能。
    */
   if (brainResult.needConfirmation === true) {
     return replyText(
       event.replyToken,
-      brainResult.question || "我還不太確定你的意思，可以再說明一下嗎？",
+      lineResponseBuilder.buildConfirmationMessage(brainResult),
     );
   }
-  /**
-   * ======================
-   * Intent: Create Reminder
-   * ======================
-   */
+
   /**
    * ======================
    * Brain: Create Reminder
    * ======================
    *
    * 如果 Brain 判斷可以建立提醒，
-   * Controller 就交給 createReminder 處理。
+   * Controller 就交給 Reminder Service 處理。
    */
   if (
     brainResult.action === "CREATE_REMINDER" &&
@@ -74,11 +72,6 @@ async function handleEvent(event) {
     return createReminder(event.replyToken, userId, text);
   }
 
-  /**
-   * ======================
-   * Intent: Today Dashboard
-   * ======================
-   */
   /**
    * ======================
    * Brain: Today Dashboard
@@ -99,45 +92,54 @@ async function handleEvent(event) {
    * Fallback
    * ======================
    */
-  return replyText(
-    event.replyToken,
-    "請輸入：提醒我 7/5 20:00 到巴國小 或 今天工作",
-  );
+  return replyText(event.replyToken, lineResponseBuilder.buildUnknownMessage());
 }
 
 /**
  * =========================================================
- * Intent: Create Reminder
+ * Action: Create Reminder
  * =========================================================
  */
 async function createReminder(replyToken, userId, text) {
   const result = parseReminderText(text);
 
   if (!result) {
-    return replyText(replyToken, "格式錯誤，請重新輸入提醒");
+    return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
   }
 
   try {
     await reminderService.createReminder(userId, result.remindAt, result.title);
   } catch (error) {
     console.error(error);
-    return replyText(replyToken, "建立提醒失敗，請稍後再試");
+
+    return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
   }
 
-  return replyText(replyToken, `✅ 已建立提醒\n\n📝 ${result.title}`);
+  return replyText(
+    replyToken,
+    lineResponseBuilder.buildReminderCreatedMessage({
+      title: result.title,
+    }),
+  );
 }
 
 /**
  * =========================================================
- * Intent: Today Dashboard
+ * Action: Today Dashboard
  * =========================================================
  */
 async function handleTodayDashboard(replyToken, userId) {
-  const dashboard = await dashboardService.getTodayDashboard(userId);
+  try {
+    const dashboard = await dashboardService.getTodayDashboard(userId);
 
-  const message = buildDashboardMessage(dashboard);
+    const message = lineResponseBuilder.buildDashboardMessage(dashboard);
 
-  return replyText(replyToken, message);
+    return replyText(replyToken, message);
+  } catch (error) {
+    console.error(error);
+
+    return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
+  }
 }
 
 /**
@@ -155,42 +157,6 @@ async function replyText(replyToken, text) {
       },
     ],
   });
-}
-
-/**
- * =========================================================
- * Dashboard Formatter
- * =========================================================
- */
-function buildDashboardMessage(d) {
-  let msg = "";
-
-  msg += "📅 今天任務\n";
-  d.todayTasks.forEach((t) => {
-    msg += `- ${t.title}\n`;
-  });
-
-  msg += "\n⏰ 即將到期\n";
-  d.dueSoon.forEach((t) => {
-    msg += `- ${t.title}\n`;
-  });
-
-  msg += "\n⚠️ 衝突\n";
-  if (d.conflicts.length === 0) {
-    msg += "無\n";
-  } else {
-    d.conflicts.forEach((c) => {
-      msg += `- ${c.a} vs ${c.b}\n`;
-    });
-  }
-
-  msg += "\n📊 負載\n";
-  msg += d.load + "\n";
-
-  msg += "\n💡 建議\n";
-  msg += d.aiHint;
-
-  return msg;
 }
 
 module.exports = {
