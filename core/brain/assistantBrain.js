@@ -19,7 +19,7 @@
  */
 
 const { parseIntent } = require("../conversation/intentParser");
-
+const { extractEntities } = require("../conversation/entityExtractor");
 /**
  * 處理使用者訊息
  *
@@ -41,7 +41,9 @@ async function processMessage(input) {
    * Step 1：交給 Conversation 模組判斷 Intent
    */
   const intentResult = parseIntent(text);
+  const entities = extractEntities(text);
 
+  console.log("Entity Result:", entities);
   console.log("Intent Result:", intentResult);
 
   /**
@@ -51,7 +53,7 @@ async function processMessage(input) {
     action: intentResult.intent,
     needConfirmation: intentResult.intent === "UNKNOWN",
     confidence: intentResult.confidence,
-    entities: {},
+    entities,
     rawText: text,
   };
 }
