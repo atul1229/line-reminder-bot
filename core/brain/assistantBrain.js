@@ -73,11 +73,28 @@ async function processMessage(input) {
   }
 
   /**
-   * Step 4：如果 rule-based 無法執行，才交給 AI Parser
+   * Step 4：如果 Intent 已經明確，但資訊不足，
+   * 不要交給 AI Parser，直接採用 rule-based 的追問結果。
    *
-   * 注意：
-   * - 目前 AI Parser 還是 mock
-   * - 所以這一步主要是建立未來可擴充架構
+   * 例如：
+   * - 提醒我 開會
+   *   → Intent 是 CREATE_REMINDER
+   *   → 缺 datetime
+   *   → 應該問「什麼時候提醒？」
+   */
+  if (ruleIntentResult.intent !== INTENTS.UNKNOWN) {
+    return buildBrainResult({
+      source: "RULE_BASED_INCOMPLETE",
+      intentResult: ruleIntentResult,
+      decision: ruleDecision,
+      entities: ruleEntities,
+      rawText: text,
+    });
+  }
+
+  /**
+   * Step 5：只有 rule-based 連 Intent 都判斷不出來，
+   * 才交給 AI Parser。
    */
   const aiResult = await parseWithAI(text);
 
