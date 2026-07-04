@@ -20,6 +20,7 @@
 
 const { parseIntent } = require("../conversation/intentParser");
 const { extractEntities } = require("../conversation/entityExtractor");
+const { makeDecision } = require("../planner/decisionEngine");
 /**
  * 處理使用者訊息
  *
@@ -42,7 +43,12 @@ async function processMessage(input) {
    */
   const intentResult = parseIntent(text);
   const entities = extractEntities(text);
+  const decision = makeDecision({
+    intentResult,
+    entities,
+  });
 
+  console.log("Decision Result:", decision);
   console.log("Entity Result:", entities);
   console.log("Intent Result:", intentResult);
 
@@ -50,9 +56,13 @@ async function processMessage(input) {
    * Step 2：將 Intent 轉換成 Brain 的標準輸出
    */
   return {
-    action: intentResult.intent,
-    needConfirmation: intentResult.intent === "UNKNOWN",
+    action: decision.action,
+    canExecute: decision.canExecute,
+    needConfirmation: decision.needConfirmation,
     confidence: intentResult.confidence,
+    reason: decision.reason || null,
+    question: decision.question || null,
+    service: decision.service || null,
     entities,
     rawText: text,
   };
