@@ -21,6 +21,7 @@ const { parseReminderText } = require("../utils/timeParser");
 const { lineClient } = require("../config/line");
 const assistantBrain = require("../core/brain/assistantBrain");
 const lineResponseBuilder = require("../core/response/lineResponseBuilder");
+const { parseReminderText } = require("../utils/timeParser");
 
 /**
  * =========================================================
@@ -103,14 +104,14 @@ async function handleEvent(event) {
 async function createReminder(replyToken, userId, entities) {
   const { title, datetimeText } = entities;
 
-  const result = parseReminderText(`提醒我 ${datetimeText} ${title}`);
+  const remindAt = parseDateTimeText(datetimeText);
 
-  if (!result) {
+  if (!remindAt) {
     return replyText(replyToken, lineResponseBuilder.buildErrorMessage());
   }
 
   try {
-    await reminderService.createReminder(userId, result.remindAt, title);
+    await reminderService.createReminder(userId, remindAt, title);
   } catch (error) {
     console.error(error);
 

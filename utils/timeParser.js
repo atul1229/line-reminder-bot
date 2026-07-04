@@ -74,7 +74,74 @@ function parseReminderText(text) {
     title: t,
   };
 }
+/**
+ * 將時間文字轉換成提醒時間 ISO 字串
+ *
+ * @param {string} datetimeText - 時間文字，例如：明天、今天、7/5 20:00
+ * @returns {string|null}
+ */
+function parseDateTimeText(datetimeText) {
+  if (!datetimeText) return null;
+
+  const text = datetimeText.trim();
+  const now = new Date();
+
+  /**
+   * ======================
+   * 標準格式
+   * 7/5 20:00
+   * ======================
+   */
+  const standardMatch = text.match(/(\d{1,2})\/(\d{1,2})\s*(\d{1,2}):(\d{2})/);
+
+  if (standardMatch) {
+    const year = now.getFullYear();
+
+    return `${year}-${standardMatch[1].padStart(2, "0")}-${standardMatch[2].padStart(2, "0")}T${standardMatch[3].padStart(2, "0")}:${standardMatch[4]}:00+08:00`;
+  }
+
+  /**
+   * ======================
+   * 明天
+   * 目前先預設為 09:00
+   * ======================
+   */
+  if (text.includes("明天")) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + 1);
+    date.setHours(9, 0, 0, 0);
+
+    return date.toISOString();
+  }
+
+  /**
+   * ======================
+   * 今天
+   * 目前先預設為 1 小時後
+   * ======================
+   */
+  if (text.includes("今天")) {
+    return new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+  }
+
+  /**
+   * ======================
+   * 後天
+   * 目前先預設為 09:00
+   * ======================
+   */
+  if (text.includes("後天")) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + 2);
+    date.setHours(9, 0, 0, 0);
+
+    return date.toISOString();
+  }
+
+  return null;
+}
 
 module.exports = {
   parseReminderText,
+  parseDateTimeText,
 };
