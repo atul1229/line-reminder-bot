@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const { line, lineConfig } = require("./config/line");
 const { handleEvent } = require("./controllers/lineController");

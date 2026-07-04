@@ -18,6 +18,7 @@ const reminderService = require("../services/reminderService");
 const dashboardService = require("../services/dashboardService");
 const { parseReminderText } = require("../utils/timeParser");
 const { lineClient } = require("../config/line");
+const assistantBrain = require("../core/brain/assistantBrain");
 
 /**
  * =========================================================
@@ -32,6 +33,12 @@ async function handleEvent(event) {
   const text = event.message.text.trim();
   const userId = event.source.userId;
 
+  const brainResult = await assistantBrain.processMessage({
+    userId,
+    text,
+  });
+
+  console.log("Brain Result:", brainResult);
   /**
    * ======================
    * Intent: Create Reminder
