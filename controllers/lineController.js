@@ -59,7 +59,18 @@ async function handleEvent(event) {
    * Intent: Create Reminder
    * ======================
    */
-  if (text.startsWith("提醒我")) {
+  /**
+   * ======================
+   * Brain: Create Reminder
+   * ======================
+   *
+   * 如果 Brain 判斷可以建立提醒，
+   * Controller 就交給 createReminder 處理。
+   */
+  if (
+    brainResult.action === "CREATE_REMINDER" &&
+    brainResult.canExecute === true
+  ) {
     return createReminder(event.replyToken, userId, text);
   }
 
