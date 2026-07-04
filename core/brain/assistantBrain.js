@@ -18,9 +18,11 @@
  * =========================================================
  */
 
-const { parseIntent } = require("../conversation/intentParser");
+const { parseIntent, INTENTS } = require("../conversation/intentParser");
 const { extractEntities } = require("../conversation/entityExtractor");
+const { parseWithAI } = require("../conversation/aiConversationParser");
 const { makeDecision } = require("../planner/decisionEngine");
+
 /**
  * 處理使用者訊息
  *
@@ -28,7 +30,7 @@ const { makeDecision } = require("../planner/decisionEngine");
  * @param {string} input.userId - 使用者 ID
  * @param {string} input.text - 使用者輸入文字
  *
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
 async function processMessage(input) {
   const { userId, text } = input;
@@ -39,23 +41,95 @@ async function processMessage(input) {
   });
 
   /**
-   * Step 1：交給 Conversation 模組判斷 Intent
+   * Step 1：先使用 rule-based parser
    */
-  const intentResult = parseIntent(text);
-  const entities = extractEntities(text);
-  const decision = makeDecision({
-    intentResult,
-    entities,
-  });
+  const ruleIntentResult = parseIntent(text);
+  const ruleEntities = extractEntities(text);
 
-  console.log("Decision Result:", decision);
-  console.log("Entity Result:", entities);
-  console.log("Intent Result:", intentResult);
+  console.log("Rule Intent Result:", ruleIntentResult);
+  console.log("Rule Entity Result:", ruleEntities);
 
   /**
-   * Step 2：將 Intent 轉換成 Brain 的標準輸出
+   * Step 2：先讓 Decision Engine 判斷 rule-based 結果是否足夠
    */
+  const ruleDecision = makeDecision({
+    intentResult: ruleIntentResult,
+    entities: ruleEntities,
+  });
+
+  console.log("Rule Decision Result:", ruleDecision);
+
+  /**
+   * Step 3：如果 rule-based 已經可以執行，就直接採用
+   */
+  if (ruleDecision.canExecute === true) {
+    return buildBrainResult({
+      source: "RULE_BASED",
+      intentResult: ruleIntentResult,
+      decision: ruleDecision,
+      entities: ruleEntities,
+      rawText: text,
+    });
+  }
+
+  /**
+   * Step 4：如果 rule-based 無法執行，才交給 AI Parser
+   *
+   * 注意：
+   * - 目前 AI Parser 還是 mock
+   * - 所以這一步主要是建立未來可擴充架構
+   */
+  const aiResult = await parseWithAI(text);
+
+  console.log("AI Parser Result:", aiResult);
+
+  const aiIntentResult = {
+    intent: aiResult.intent || INTENTS.UNKNOWN,
+    confidence: aiResult.confidence || 0,
+    rawText: text,
+  };
+
+  const aiEntities = aiResult.entities || {
+    rawText: text,
+    title: null,
+    datetimeText: null,
+  };
+
+  const aiDecision = makeDecision({
+    intentResult: aiIntentResult,
+    entities: aiEntities,
+  });
+
+  console.log("AI Decision Result:", aiDecision);
+
+  /**
+   * Step 5：回傳 AI Parser 後的決策結果
+   */
+  return buildBrainResult({
+    source: "AI_PARSER",
+    intentResult: aiIntentResult,
+    decision: aiDecision,
+    entities: aiEntities,
+    rawText: text,
+  });
+}
+
+/**
+ * 建立 Brain 標準輸出
+ *
+ * @param {Object} input
+ * @param {string} input.source
+ * @param {Object} input.intentResult
+ * @param {Object} input.decision
+ * @param {Object} input.entities
+ * @param {string} input.rawText
+ * @returns {Object}
+ */
+function buildBrainResult(input) {
+  const { source, intentResult, decision, entities, rawText } = input;
+
   return {
+    source,
     action: decision.action,
     canExecute: decision.canExecute,
     needConfirmation: decision.needConfirmation,
@@ -64,7 +138,7 @@ async function processMessage(input) {
     question: decision.question || null,
     service: decision.service || null,
     entities,
-    rawText: text,
+    rawText,
   };
 }
 
