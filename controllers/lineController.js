@@ -39,6 +39,21 @@ async function handleEvent(event) {
   });
 
   console.log("Brain Result:", brainResult);
+
+  /**
+   * ======================
+   * Brain: Need Confirmation
+   * ======================
+   *
+   * 如果 Brain 判斷資訊不足或語意不明確，
+   * Controller 應該先回覆追問，而不是直接執行舊流程。
+   */
+  if (brainResult.needConfirmation === true) {
+    return replyText(
+      event.replyToken,
+      brainResult.question || "我還不太確定你的意思，可以再說明一下嗎？",
+    );
+  }
   /**
    * ======================
    * Intent: Create Reminder
