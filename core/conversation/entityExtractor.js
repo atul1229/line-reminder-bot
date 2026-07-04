@@ -27,10 +27,13 @@
 function extractEntities(text) {
   const normalizedText = text.trim();
 
+  const datetimeText = extractDateTimeText(normalizedText);
+  const title = extractTitle(normalizedText, datetimeText);
+
   return {
     rawText: text,
-    title: extractTitle(normalizedText),
-    datetimeText: extractDateTimeText(normalizedText),
+    title,
+    datetimeText,
   };
 }
 
@@ -38,9 +41,10 @@ function extractEntities(text) {
  * 擷取提醒內容
  *
  * @param {string} text
+ * @param {string|null} datetimeText
  * @returns {string|null}
  */
-function extractTitle(text) {
+function extractTitle(text, datetimeText) {
   let result = text;
 
   const removeWords = ["提醒我", "幫我提醒", "記得提醒", "不要忘記", "提醒"];
@@ -49,9 +53,11 @@ function extractTitle(text) {
     result = result.replace(word, "");
   });
 
-  result = removeDateTimeWords(result);
+  if (datetimeText) {
+    result = result.replace(datetimeText, "");
+  }
 
-  result = result.trim();
+  result = cleanText(result);
 
   return result || null;
 }
@@ -66,17 +72,17 @@ function extractTitle(text) {
  */
 function extractDateTimeText(text) {
   const patterns = [
-    /今天[^\s，,。]*/g,
-    /明天[^\s，,。]*/g,
-    /後天[^\s，,。]*/g,
-    /\d{1,2}\/\d{1,2}\s*\d{1,2}:\d{2}/g,
-    /\d{1,2}:\d{2}/g,
+    /\d{1,2}\/\d{1,2}\s*\d{1,2}:\d{2}/,
+    /\d{1,2}:\d{2}/,
+    /今天/,
+    /明天/,
+    /後天/,
   ];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
 
-    if (match && match.length > 0) {
+    if (match) {
       return match[0];
     }
   }
@@ -85,18 +91,16 @@ function extractDateTimeText(text) {
 }
 
 /**
- * 從文字中移除時間相關字詞
+ * 清理文字
  *
  * @param {string} text
  * @returns {string}
  */
-function removeDateTimeWords(text) {
+function cleanText(text) {
   return text
-    .replace(/今天[^\s，,。]*/g, "")
-    .replace(/明天[^\s，,。]*/g, "")
-    .replace(/後天[^\s，,。]*/g, "")
-    .replace(/\d{1,2}\/\d{1,2}\s*\d{1,2}:\d{2}/g, "")
-    .replace(/\d{1,2}:\d{2}/g, "");
+    .replace(/\s+/g, " ")
+    .replace(/[，,。]/g, "")
+    .trim();
 }
 
 module.exports = {
