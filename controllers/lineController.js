@@ -23,8 +23,9 @@ const lineResponseBuilder = require("../core/response/lineResponseBuilder");
 const { parseDateTimeText } = require("../utils/timeParser");
 const {
   setConversationState,
+  getConversationState,
+  clearConversationState,
 } = require("../core/conversation/conversationState");
-
 /**
  * =========================================================
  * 主入口：LINE Event Handler
@@ -37,6 +38,31 @@ async function handleEvent(event) {
 
   const text = event.message.text.trim();
   const userId = event.source.userId;
+  /**
+   * ======================
+   * Conversation State: Pending Reminder
+   * ======================
+   *
+   * 如果使用者上一輪有未完成的提醒，
+   * 且目前缺的是 datetimeText，
+   * 則把這一輪輸入當作時間補充。
+   */
+  const pendingState = getConversationState(userId);
+
+  if (
+    pendingState &&
+    pendingState.pendingAction === "CREATE_REMINDER" &&
+    pendingState.missingField === "datetimeText"
+  ) {
+    const completedEntities = {
+      ...pendingState.entities,
+      datetimeText: text,
+    };
+
+    clearConversationState(userId);
+
+    return createReminder(event.replyToken, userId, completedEntities);
+  }
 
   const brainResult = await assistantBrain.processMessage({
     userId,
