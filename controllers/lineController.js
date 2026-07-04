@@ -79,10 +79,17 @@ async function handleEvent(event) {
    * Intent: Today Dashboard
    * ======================
    */
+  /**
+   * ======================
+   * Brain: Today Dashboard
+   * ======================
+   *
+   * 如果 Brain 判斷使用者想查看今日工作，
+   * Controller 就交給 Dashboard Service 處理。
+   */
   if (
-    text.includes("今天工作") ||
-    text.includes("今天要做什麼") ||
-    text.includes("今天提醒")
+    brainResult.action === "TODAY_DASHBOARD" &&
+    brainResult.canExecute === true
   ) {
     return handleTodayDashboard(event.replyToken, userId);
   }
