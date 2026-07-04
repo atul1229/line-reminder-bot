@@ -21,11 +21,13 @@ const { lineClient } = require("../config/line");
 const assistantBrain = require("../core/brain/assistantBrain");
 const lineResponseBuilder = require("../core/response/lineResponseBuilder");
 const { parseDateTimeText } = require("../utils/timeParser");
+
 const {
   setConversationState,
   getConversationState,
   clearConversationState,
 } = require("../core/conversation/conversationState");
+
 /**
  * =========================================================
  * 主入口：LINE Event Handler
@@ -38,32 +40,66 @@ async function handleEvent(event) {
 
   const text = event.message.text.trim();
   const userId = event.source.userId;
+
   /**
    * ======================
-   * Conversation State: Pending Reminder
+   * Conversation State
    * ======================
    *
-   * 如果使用者上一輪有未完成的提醒，
-   * 且目前缺的是 datetimeText，
-   * 則把這一輪輸入當作時間補充。
+   * 如果使用者上一輪有未完成的對話，
+   * 優先處理多輪對話狀態。
    */
   const pendingState = getConversationState(userId);
 
-  if (
-    pendingState &&
-    pendingState.pendingAction === "CREATE_REMINDER" &&
-    pendingState.missingField === "datetimeText"
-  ) {
-    const completedEntities = {
-      ...pendingState.entities,
-      datetimeText: text,
-    };
+  if (pendingState) {
+    /**
+     * ======================
+     * Conversation State: Cancel
+     * ======================
+     *
+     * 如果使用者在多輪對話中輸入取消，
+     * 則清除暫存狀態，不再建立提醒。
+     */
+    if (isCancelText(text)) {
+      clearConversationState(userId);
 
-    clearConversationState(userId);
+      return replyText(event.replyToken, "已取消這次操作。");
+    }
 
-    return createReminder(event.replyToken, userId, completedEntities);
+    /**
+     * ======================
+     * Conversation State: Pending Reminder
+     * ======================
+     *
+     * 如果使用者上一輪有未完成的提醒，
+     * 且目前缺的是 datetimeText，
+     * 則把這一輪輸入當作時間補充。
+     */
+    if (
+      pendingState.pendingAction === "CREATE_REMINDER" &&
+      pendingState.missingField === "datetimeText"
+    ) {
+      const completedEntities = {
+        ...pendingState.entities,
+        datetimeText: text,
+      };
+
+      clearConversationState(userId);
+
+      return createReminder(event.replyToken, userId, completedEntities);
+    }
   }
 
+  /**
+   * ======================
+   * Assistant Brain
+   * ======================
+   *
+   * 將使用者輸入交給 Brain 判斷：
+   * - 使用者想做什麼
+   * - 資訊是否足夠
+   * - 是否需要追問
+   */
   const brainResult = await assistantBrain.processMessage({
     userId,
     text,
@@ -82,11 +118,12 @@ async function handleEvent(event) {
   if (brainResult.needConfirmation === true) {
     /**
      * ======================
-     * Conversation State
+     * Conversation State: Store Pending Reminder
      * ======================
      *
      * 如果 Brain 判斷是建立提醒但缺少時間，
-     * 先暫存目前的提醒內容，等待使用者下一輪補時間。
+     * 先暫存目前的提醒內容，
+     * 等待使用者下一輪補時間。
      */
     if (
       brainResult.action === "ASK_CONFIRMATION" &&
@@ -149,6 +186,12 @@ async function handleEvent(event) {
  * =========================================================
  * Action: Create Reminder
  * =========================================================
+ *
+ * 使用 Brain 解析好的 entities 建立提醒。
+ *
+ * @param {string} replyToken
+ * @param {string} userId
+ * @param {Object} entities
  */
 async function createReminder(replyToken, userId, entities) {
   const { title, datetimeText } = entities;
@@ -179,6 +222,11 @@ async function createReminder(replyToken, userId, entities) {
  * =========================================================
  * Action: Today Dashboard
  * =========================================================
+ *
+ * 查詢今日 Dashboard 並回覆使用者。
+ *
+ * @param {string} replyToken
+ * @param {string} userId
  */
 async function handleTodayDashboard(replyToken, userId) {
   try {
@@ -196,8 +244,29 @@ async function handleTodayDashboard(replyToken, userId) {
 
 /**
  * =========================================================
+ * Helper: Cancel Text
+ * =========================================================
+ *
+ * 判斷使用者是否想取消目前的多輪對話狀態。
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isCancelText(text) {
+  const cancelWords = ["取消", "不用了", "算了", "不要", "先不要"];
+
+  return cancelWords.some((word) => text.includes(word));
+}
+
+/**
+ * =========================================================
  * LINE Reply Utility
  * =========================================================
+ *
+ * 統一處理 LINE replyMessage。
+ *
+ * @param {string} replyToken
+ * @param {string} text
  */
 async function replyText(replyToken, text) {
   return lineClient.replyMessage({
